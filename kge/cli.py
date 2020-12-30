@@ -5,6 +5,8 @@ import os
 import sys
 import traceback
 import yaml
+import wandb
+import json
 
 from kge import Dataset
 from kge import Config
@@ -53,6 +55,8 @@ def create_parser(config, additional_args=[]):
         "job.type": "-j",
         "train.max_epochs": "-e",
         "model": "-m",
+        "logger": "-l",
+        "wandb_project": "-p",
     }
 
     # create parser for config
@@ -184,7 +188,8 @@ def main():
 
         if not vars(args)["console.quiet"]:
             print("Loading configuration {}...".format(args.config))
-        config.load(args.config)
+        config.load(args.config, create=True)
+        # config.load(args.config)
 
     # resume command
     if args.command == "resume":
@@ -252,7 +257,7 @@ def main():
 
         # log configuration
         config.log("Configuration:")
-        config.log(yaml.dump(config.options), prefix="  ")
+        # config.log(yaml.dump(config.options), prefix="  ")
         config.log("git commit: {}".format(get_git_revision_short_hash()), prefix="  ")
 
         # set random seeds
@@ -291,6 +296,11 @@ def main():
 
             seed_numba(get_seed("numba"))
 
+        if config.exists('logger') and config.get('logger') == 'wandb':     # FIXME WANDB
+            wandb.init(project=config.get('logger_project_name'), entity='alexgaskell')
+            config.args = vars(args)
+            wandb.config.update(config.options)
+
         # let's go
         if args.command == "start" and not args.run:
             config.log("Job created successfully.")
@@ -322,4 +332,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        sys.argv[1:] = ['start', 'examples/demo.yaml']#, '-l', 'wandb', '-p', 'kge-test-basic']      # FIXME
+
     main()

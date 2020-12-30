@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.utils.data
+from torch import optim
 import numpy as np
 
 from kge import Config, Dataset
@@ -22,6 +23,9 @@ from typing import Any, Callable, Dict, List, Optional
 import kge.job.util
 from kge.util.metric import Metric
 from kge.misc import init_from
+
+from kge.model.encoders.simple_encoder import EncodedKge #CompoundOptimizer, BertEncoder
+import wandb
 
 SLOTS = [0, 1, 2]
 S, P, O = SLOTS
@@ -112,6 +116,19 @@ class TrainingJob(TrainingOrEvaluationJob):
             for f in Job.job_created_hooks:
                 f(self)
 
+        if self.config.exists("encoder"):
+            print('Creating encoder'+'\n'*2)
+            self.model = EncodedKge(config, self.model).to(self.device)
+            self.model.encoder.prepare_entity_ids(dataset)
+            self.encoder_optimizer = optim.Adam(
+                [p for p in self.model.encoder.parameters()],
+                lr=self.config.get("encoder.optimizer.lr"),
+            )
+            self.encoder_scheduler = optim.lr_scheduler.StepLR(
+                self.encoder_optimizer, step_size=1, gamma=0.9)
+            self.valid_job.model = self.model
+
+
     @staticmethod
     def create(
         config: Config,
@@ -153,6 +170,8 @@ class TrainingJob(TrainingOrEvaluationJob):
                 len(self.valid_trace) > 0
                 and self.valid_trace[-1]["epoch"] == self.epoch
             ):
+                if len(self.valid_trace) > 0 and self.config.exists("logger") and self.config.get("logger") == 'wandb':
+                    wandb.log(self.valid_trace[-1])     # TODO wandb
                 best_index = Metric(self).best_index(
                     list(map(lambda trace: trace[metric_name], self.valid_trace))
                 )
@@ -218,6 +237,8 @@ class TrainingJob(TrainingOrEvaluationJob):
                 self.kge_lr_scheduler.step(trace_entry[metric_name])
             else:
                 self.kge_lr_scheduler.step()
+            if self.config.exists("encoder"):
+                self.encoder_scheduler.step()
 
             # create checkpoint and delete old one, if necessary
             self.save(self.config.checkpoint_file(self.epoch))
@@ -331,6 +352,8 @@ class TrainingJob(TrainingOrEvaluationJob):
         optimizer_time = 0.0
 
         # process each batch
+        # first_batch = next(iter(self.loader))       # TODO
+        # for batch_index, batch in enumerate([first_batch] * 1):
         for batch_index, batch in enumerate(self.loader):
             # create initial batch trace (yet incomplete)
             self.current_trace["batch"] = {
@@ -357,6 +380,8 @@ class TrainingJob(TrainingOrEvaluationJob):
                     # try running the batch
                     if not self.is_forward_only:
                         self.optimizer.zero_grad()
+                        if self.config.exists("encoder"):
+                            self.encoder_optimizer.zero_grad()
                     batch_result: TrainingJob._ProcessBatchResult = self._process_batch(
                         batch_index, batch
                     )
@@ -451,6 +476,8 @@ class TrainingJob(TrainingOrEvaluationJob):
             batch_optimizer_time = -time.time()
             if not self.is_forward_only:
                 self.optimizer.step()
+                if self.config.exists("encoder"):
+                    self.encoder_optimizer.step()
             batch_optimizer_time += time.time()
 
             # update batch trace with the results
@@ -546,6 +573,9 @@ class TrainingJob(TrainingOrEvaluationJob):
             format_trace_entry("train_epoch", trace_entry, self.config), prefix="  "
         )
         self.current_trace["epoch"] = None
+        
+        if self.config.exists("logger") and self.config.get("logger") == 'wandb':
+            wandb.log(trace_entry)      # TODO wandb
 
         return trace_entry
 

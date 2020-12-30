@@ -248,6 +248,8 @@ class Dataset(Configurable):
                     if not ignore_duplicates:
                         raise KeyError(f"{filename} contains duplicated keys")
                 else:
+                    if delimiter in value:
+                        value = value.split(delimiter, maxsplit=1)
                     dictionary[key] = value
         if as_list:
             array = [None] * n

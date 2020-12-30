@@ -6,6 +6,8 @@ from kge.job import Job
 from kge.job.train import TrainingJob, _generate_worker_init_fn
 from kge.util import KgeSampler
 
+import wandb
+
 SLOTS = [0, 1, 2]
 S, P, O = SLOTS
 SLOT_STR = ["s", "p", "o"]
@@ -134,7 +136,7 @@ class TrainingJobNegativeSampling(TrainingJob):
             result.forward_time -= time.time()
             scores = torch.empty((subbatch_size, num_samples + 1), device=self.device)
             scores[:, 0] = self.model.score_spo(
-                triples[:, S], triples[:, P], triples[:, O], direction=SLOT_STR[slot],
+                triples[:, S], triples[:, P], triples[:, O], direction=SLOT_STR[slot]
             )
             result.forward_time += time.time()
             scores[:, 1:] = batch_negative_samples[slot].score(
@@ -150,7 +152,10 @@ class TrainingJobNegativeSampling(TrainingJob):
             )
             result.avg_loss += loss_value_torch.item()
             result.forward_time += time.time()
-
+          
+            if self.config.exists("logger") and self.config.get("logger") == 'wandb':
+                wandb.log({'loss': loss_value_torch.item()})    # TODO wandb
+          
             # backward pass for this slot in the subbatch
             result.backward_time -= time.time()
             if not self.is_forward_only:

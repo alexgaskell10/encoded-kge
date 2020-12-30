@@ -601,6 +601,9 @@ ax_search:
 
 ## USER PARAMETERS #####################################################################
 
+logger: ''
+logger_project_name: ''
+
 # These parameters are not used by the kge framework itself. It can be used to
 # add additional configuration options or information to this config.
 user:

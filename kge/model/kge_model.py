@@ -767,7 +767,6 @@ class KgeModel(KgeBase):
         holds the score for triple :math:`(e_{j-E}, p_i, o_i)`.
 
         """
-
         s = self.get_s_embedder().embed(s)
         p = self.get_p_embedder().embed(p)
         o = self.get_o_embedder().embed(o)

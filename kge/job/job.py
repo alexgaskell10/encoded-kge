@@ -9,7 +9,6 @@ import os
 import socket
 from typing import Any, Callable, Dict, List, Optional
 
-
 def _trace_job_creation(job: "Job"):
     """Create a trace entry for a job"""
     from torch import __version__ as torch_version
@@ -196,4 +195,4 @@ class TrainingOrEvaluationJob(Job):
         # determines which trace entry (e.g., "batch", "epoch"). These traces can be
         # modified by the hooks defined above. The traces are logged only after the
         # corresponding hooks have been executed. The traces are then cleared.
-        self.current_trace: Dict[str, Dict[str, Any]] = {"batch": None, "epoch": None}
+        self.current_trace: Dict[str, Dict[str, Any]] = {"batch": None, "epoch": None}        
